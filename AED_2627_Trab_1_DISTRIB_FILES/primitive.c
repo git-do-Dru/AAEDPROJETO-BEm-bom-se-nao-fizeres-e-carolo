@@ -7,10 +7,10 @@
  */
 
 /**
- * STUDENT NAME:
- * STUDENT NUMBER:
- * STUDENT NAME:
- * STUDENT NUMBER:
+ * STUDENT NAME: Alexandru Zavgorodnii
+ * STUDENT NUMBER:133287
+ * STUDENT NAME: Marco Oliveira
+ * STUDENT NUMBER:133031
  */
 
 #include "primitive.h"
@@ -203,44 +203,85 @@ Primitive* primitive_create_rectangle(int id, Point top_left, double width,
                                       int z_index) {
   /* TODO: Student Implementation
    */
-  (void)id;
-  (void)top_left;
-  (void)width;
-  (void)height;
-  (void)color;
-  (void)alpha;
-  (void)z_index;
-  return NULL;
+  if (width <= 0.0 || height <= 0.0 || alpha < 0.0 || alpha > 1.0) {
+    return NULL;
+  }
+
+  Primitive* p =
+      primitive_allocate_common(id, PRIM_RECTANGLE, color, alpha, z_index);
+  if (p == NULL) {
+    return NULL;
+  }
+
+  p->geom.rectangle.top_left = top_left;
+  p->geom.rectangle.width = width;
+  p->geom.rectangle.height = height;
+
+  // Automatically calculate initial AABB
+  primitive_update_aabb(p);
+
+  return p;
+
 }
 
 Primitive* primitive_create_segment(int id, Point p1, Point p2, Color color,
                                     double alpha, int z_index) {
   /* TODO: Student Implementation
    */
-  (void)id;
-  (void)p1;
-  (void)p2;
-  (void)color;
-  (void)alpha;
-  (void)z_index;
-  return NULL;
+  if (alpha < 0.0 || alpha > 1.0) {
+    return NULL;
+  }
+
+  Primitive* p =
+      primitive_allocate_common(id, PRIM_SEGMENT, color, alpha, z_index);
+  if (p == NULL) {
+    return NULL;
+  }
+
+  p->geom.segment.p1 = p1;
+  p->geom.segment.p2 = p2;
+
+  primitive_update_aabb(p);
+
+  return p;
+
 }
 
 Primitive* primitive_create_polygon(int id, Color color, double alpha,
                                     int z_index) {
   /* TODO: Student Implementation
    */
-  (void)id;
-  (void)color;
-  (void)alpha;
-  (void)z_index;
-  return NULL;
+  if (alpha < 0.0 || alpha > 1.0) {
+    return NULL;
+  }
+
+  Primitive* p =
+      primitive_allocate_common(id, PRIM_POLYGON, color, alpha, z_index);
+  if (p == NULL) {
+    return NULL;
+  }
+
+  p->geom.polygon.vertices = NULL;
+  p->geom.polygon.num_vertices = 0;
+  p->geom.polygon.capacity = 0;
+
+  return p;
+
 }
 
 void primitive_destroy(Primitive* p) {
   /* TODO: Student Implementation
    */
-  (void)p;
+  if (p == NULL) {
+    return;
+  }
+
+  if (p->type == PRIM_POLYGON) {
+    free(p->geom.polygon.vertices);
+  }
+
+  free(p);
+
 }
 
 // ============================================================================
@@ -250,17 +291,58 @@ void primitive_destroy(Primitive* p) {
 bool polygon_add_vertex(Primitive* p, Point pt) {
   /* TODO: Student Implementation
    */
-  (void)p;
-  (void)pt;
-  return false;
+  if (p == NULL || p->type != PRIM_POLYGON) {
+    return false;
+  }
+
+  if (p->geom.polygon.num_vertices == p->geom.polygon.capacity) {
+    // Reservamos espaco para 4 pontos
+    size_t new_capacity;
+    if (p->geom.polygon.capacity == 0) {
+        new_capacity = 4; 
+    // Se nao tinha espaco suficiente duplicamos
+    } else {
+        new_capacity = p->geom.polygon.capacity * 2; 
+    }
+
+    // Ponteiro temporario para nao perder ponteiro original
+    Point* new_vertices =
+        realloc(p->geom.polygon.vertices, new_capacity * sizeof(Point));
+    if (new_vertices == NULL) {
+      return false; 
+    }
+
+    p->geom.polygon.vertices = new_vertices;
+    p->geom.polygon.capacity = new_capacity;
+  }
+
+  p->geom.polygon.vertices[p->geom.polygon.num_vertices] = pt;
+  p->geom.polygon.num_vertices++;
+
+  p->is_aabb_dirty = true;
+
+  return true;
 }
 
 bool polygon_remove_vertex(Primitive* p, size_t index) {
   /* TODO: Student Implementation
    */
-  (void)p;
-  (void)index;
-  return false;
+  if (p == NULL || p->type != PRIM_POLYGON ||
+      index >= p->geom.polygon.num_vertices) {
+    return false;
+  }
+
+  // Percorrer o Array e deslocar os valores para a esquerda 
+  for (size_t i = index; i < p->geom.polygon.num_vertices - 1; i++) {
+    p->geom.polygon.vertices[i] = p->geom.polygon.vertices[i + 1];
+  }
+
+  p->geom.polygon.num_vertices--;
+
+  p->is_aabb_dirty = true;
+
+  return true;
+
 }
 
 // ============================================================================
