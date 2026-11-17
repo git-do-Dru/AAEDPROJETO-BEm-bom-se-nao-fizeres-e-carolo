@@ -7,10 +7,10 @@
  */
 
 /**
- * STUDENT NAME:
- * STUDENT NUMBER:
- * STUDENT NAME:
- * STUDENT NUMBER:
+ * STUDENT NAME: Alexandru Zavgorodnii
+ * STUDENT NUMBER:133287
+ * STUDENT NAME: Marco Oliveira
+ * STUDENT NUMBER:133031
  */
 
 #include "vector_scene.h"
@@ -128,27 +128,44 @@ Primitive* vector_scene_get_primitive_by_id(const VectorScene* scene, int id) {
 // ============================================================================
 
 VectorScene* vector_scene_create(int width, int height, Color bg_color) {
-  if (width <= 0 || height <= 0) {
+  if (width<=0 || height<=0) {
+    return NULL;
+  }
+  
+  VectorScene* scene=malloc(sizeof(VectorScene));
+  if (scene == NULL){
     return NULL;
   }
 
-  /* TODO: Student Implementation
-   * 1. Allocate the VectorScene data structure.
-   * 2. Set capacity = INITIAL_SCENE_CAPACITY.
-   */
-  (void)bg_color;
-  return NULL;
+  scene->width=width;
+  scene->height=height;
+  scene->bg_color=bg_color;
+  scene->capacity=INITIAL_SCENE_CAPACITY;
+  scene->count=0;
+  scene->next_auto_id=0;
+
+  scene->primitives=malloc(scene->capacity * sizeof(Primitive*));
+  if (scene->primitives==NULL){
+    free(scene);
+    return NULL;
+  }
+
+  return scene;
 }
 
 void vector_scene_destroy(VectorScene* scene) {
-  if (!scene) {
+  if (!scene){
     return;
   }
 
-  /* TODO: Student Implementation
-   * 1. Destroy each scene primitive.
-   * 2. Free all allocated memory.
-   */
+  for (size_t i = 0; i < scene->count; i++){
+    if (scene->primitives[i]!=NULL){
+      primitive_destroy(scene->primitives[i]);
+    }
+  }
+
+  free(scene->primitives);
+  free(scene);
 }
 
 // ============================================================================
@@ -160,17 +177,28 @@ int vector_scene_add_primitive(VectorScene* scene, Primitive* p) {
     return -1;
   }
 
-  /* TODO: Student Implementation
-   * 1. Check if scene->count == scene->capacity.
-   * 2. If full, expand capacity using realloc.
-   * 3. Auto-assign p->id if p->id < 0 using scene->next_auto_id++.
-   * 4. Append p to primitives array.
-   * 5. Call primitive_update_aabb(p).
-   * 6. Return assigned primitive ID.
-   * NOTE: Scene TAKES OWNERSHIP of pointer p (it no longer belongs to the
-   * client).
-   */
-  return -1;
+  //Duplica se cheio
+  if (scene->count>=scene->capacity) {
+    size_t new_capacity=scene->capacity*2;
+    Primitive** new_primitives=realloc(scene->primitives, new_capacity * sizeof(Primitive*));
+    if (new_primitives==NULL) {
+      return -1;
+    }
+    scene->primitives=new_primitives;
+    scene->capacity=new_capacity;
+  }
+
+  ///Se negativo
+  if (p->id<0) {
+    p->id=scene->next_auto_id++;
+  } else if (p->id>=scene->next_auto_id) {
+    scene->next_auto_id=p->id+1;
+  }
+
+  scene->primitives[scene->count++]=p;
+  primitive_update_aabb(p);
+
+  return p->id;
 }
 
 bool vector_scene_remove_primitive(VectorScene* scene, int id) {
@@ -178,10 +206,31 @@ bool vector_scene_remove_primitive(VectorScene* scene, int id) {
     return false;
   }
 
-  /* TODO: Student Implementation
-   * 1. Do not forget to shif left remaining primitives, if needed.
-   */
-  return false;
+  size_t index = (size_t)-1;
+  for (size_t i=0; i<scene->count; i++) {
+    if (scene->primitives[i] && scene->primitives[i]->id==id) {
+      index=i;
+      break;
+    }
+  }
+
+  if (index == (size_t)-1) {
+    return false; //ID not found
+  }
+
+  // Libertar memória da primitiva
+  primitive_destroy(scene->primitives[index]);
+
+  //Shift left
+  for (size_t i=index; i<scene->count-1; i++) {
+    scene->primitives[i]=scene->primitives[i+1];
+  }
+
+  scene -> count--;
+  
+  scene->primitives[scene -> count] = NULL;
+
+  return true;
 }
 
 // ============================================================================
@@ -194,12 +243,15 @@ bool vector_scene_translate_primitive(VectorScene* scene, int id, double dx,
     return false;
   }
 
-  /* TODO: Student Implementation
-   */
-  (void)id;
-  (void)dx;
-  (void)dy;
-  return false;
+  Primitive* p = vector_scene_get_primitive_by_id(scene, id);
+  if (p == NULL) {
+
+    return false;
+
+  }
+
+  primitive_translate(p, dx, dy);
+  return true;
 }
 
 bool vector_scene_set_z_index(VectorScene* scene, int id, int new_z_index) {
@@ -207,11 +259,15 @@ bool vector_scene_set_z_index(VectorScene* scene, int id, int new_z_index) {
     return false;
   }
 
-  /* TODO: Student Implementation
-   */
-  (void)id;
-  (void)new_z_index;
-  return false;
+  Primitive* p = vector_scene_get_primitive_by_id(scene, id);
+  if (p == NULL) {
+
+    return false;
+  
+  }
+
+  p->z_index = new_z_index;
+  return true;
 }
 
 // ============================================================================
