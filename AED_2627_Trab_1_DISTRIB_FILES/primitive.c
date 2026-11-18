@@ -363,19 +363,68 @@ void primitive_update_aabb(Primitive* p) {
       break;
 
     case PRIM_RECTANGLE:
-      /* TODO: Compute AABB for Rectangle
-       */
+      p->aabb.min.x = p->geom.rectangle.top_left.x;
+      p->aabb.min.y = p->geom.rectangle.top_left.y;
+      p->aabb.max.x = p->geom.rectangle.top_left.x + p->geom.rectangle.width;
+      p->aabb.max.y = p->geom.rectangle.top_left.y + p->geom.rectangle.height;
       break;
 
     case PRIM_SEGMENT:
-      /* TODO: Compute AABB for Segment
-       */
+    //Qual tem maior X
+      if (p->geom.segment.p1.x < p->geom.segment.p2.x) {
+        p->aabb.min.x = p->geom.segment.p1.x;
+        p->aabb.max.x = p->geom.segment.p2.x;
+      } else {
+        p->aabb.min.x = p->geom.segment.p2.x;
+        p->aabb.max.x = p->geom.segment.p1.x;
+      }
+    // Qual tem maior Y
+      if (p->geom.segment.p1.y < p->geom.segment.p2.y) {
+        p->aabb.min.y = p->geom.segment.p1.y;
+        p->aabb.max.y = p->geom.segment.p2.y;
+      } else {
+        p->aabb.min.y = p->geom.segment.p2.y;
+        p->aabb.max.y = p->geom.segment.p1.y;
+      }
       break;
 
     case PRIM_POLYGON:
-      /* TODO: Compute AABB for Polygon
-       * Iterate vertices array to find min/max coordinates
-       */
+      if (p->geom.polygon.num_vertices == 0 ||
+          p->geom.polygon.vertices == NULL) {
+        p->aabb.min = (Point){0.0, 0.0};
+        p->aabb.max = (Point){0.0, 0.0};
+      } else {
+        
+        //O primeiro vertice define limites, mas comparamos depois com os restantes para expandir
+        double min_x = p->geom.polygon.vertices[0].x;
+        double max_x = p->geom.polygon.vertices[0].x;
+        double min_y = p->geom.polygon.vertices[0].y;
+        double max_y = p->geom.polygon.vertices[0].y;
+
+        
+        for (size_t i = 1; i < p->geom.polygon.num_vertices; i++) {
+          double vx = p->geom.polygon.vertices[i].x;
+          double vy = p->geom.polygon.vertices[i].y;
+
+          if (vx < min_x) {
+            min_x = vx;
+          }
+          if (vx > max_x) {
+            max_x = vx;
+          }
+          if (vy < min_y) {
+            min_y = vy;
+          }
+          if (vy > max_y) {
+            max_y = vy;
+          }
+        }
+
+        p->aabb.min.x = min_x;
+        p->aabb.min.y = min_y;
+        p->aabb.max.x = max_x;
+        p->aabb.max.y = max_y;
+      }
       break;
   }
 
@@ -395,8 +444,35 @@ void primitive_translate(Primitive* p, double dx, double dy) {
    * - PRIM_POLYGON: translate each vertex
    * Set p->is_aabb_dirty = true
    */
-  (void)dx;
-  (void)dy;
+
+   switch (p->type) {
+    case PRIM_CIRCLE:
+      p->geom.circle.center.x += dx;
+      p->geom.circle.center.y += dy;
+      break;
+
+    case PRIM_RECTANGLE:
+      // Apenas o canto superior esquerdo muda (largura e altura nao) 
+      p->geom.rectangle.top_left.x += dx;
+      p->geom.rectangle.top_left.y += dy;
+      break;
+
+    case PRIM_SEGMENT:
+      p->geom.segment.p1.x += dx;
+      p->geom.segment.p1.y += dy;
+      p->geom.segment.p2.x += dx;
+      p->geom.segment.p2.y += dy;
+      break;
+
+    case PRIM_POLYGON:
+      for (size_t i = 0; i < p->geom.polygon.num_vertices; i++) {
+        p->geom.polygon.vertices[i].x += dx;
+        p->geom.polygon.vertices[i].y += dy;
+      }
+      break;
+  }
+
+  p->is_aabb_dirty = true;
 }
 
 void primitive_scale(Primitive* p, double factor) {
@@ -412,7 +488,50 @@ void primitive_scale(Primitive* p, double factor) {
    * - PRIM_POLYGON: scale vertices relative to polygon bounding box center
    * Set p->is_aabb_dirty = true
    */
-  (void)factor;
+  switch (p->type) {
+    case PRIM_CIRCLE:
+      p->geom.circle.radius *= factor;
+      break;
+
+    case PRIM_RECTANGLE:
+      p->geom.rectangle.width *= factor;
+      p->geom.rectangle.height *= factor;
+      break;
+
+    case PRIM_SEGMENT: {
+      // Calcular o ponto medio 
+      double mid_x = (p->geom.segment.p1.x + p->geom.segment.p2.x) / 2.0;
+      double mid_y = (p->geom.segment.p1.y + p->geom.segment.p2.y) / 2.0;
+
+      // Multiplicar os extremos relativamente ao ponto medio
+      p->geom.segment.p1.x = mid_x + (p->geom.segment.p1.x - mid_x) * factor;
+      p->geom.segment.p1.y = mid_y + (p->geom.segment.p1.y - mid_y) * factor;
+      p->geom.segment.p2.x = mid_x + (p->geom.segment.p2.x - mid_x) * factor;
+      p->geom.segment.p2.y = mid_y + (p->geom.segment.p2.y - mid_y) * factor;
+      break;
+    }
+
+    case PRIM_POLYGON: {
+      if (p->geom.polygon.num_vertices > 0 &&
+          p->geom.polygon.vertices != NULL) {
+        // obter o centro
+        BoundingBox box = primitive_get_aabb(p);
+        double center_x = (box.min.x + box.max.x) / 2.0;
+        double center_y = (box.min.y + box.max.y) / 2.0;
+
+        for (size_t i = 0; i < p->geom.polygon.num_vertices; i++) {
+          p->geom.polygon.vertices[i].x =
+              center_x + (p->geom.polygon.vertices[i].x - center_x) * factor;
+          p->geom.polygon.vertices[i].y =
+              center_y + (p->geom.polygon.vertices[i].y - center_y) * factor;
+        }
+      }
+      break;
+    }
+  }
+
+  p->is_aabb_dirty = true;
+
 }
 
 bool primitive_contains_point(const Primitive* p, Point pt) {
@@ -429,17 +548,21 @@ bool primitive_contains_point(const Primitive* p, Point pt) {
     case PRIM_RECTANGLE:
       /* TODO: Does rectangle contain point?
        */
-      return false;
+      return math_rect_contains_point(p->geom.rectangle.top_left,
+                                      p->geom.rectangle.width,
+                                      p->geom.rectangle.height, pt);
 
     case PRIM_SEGMENT:
       /* TODO: Does segment contain point?
        */
-      return false;
+      return math_segment_contains_point(p->geom.segment.p1,
+                                         p->geom.segment.p2, 1.0, pt);
 
     case PRIM_POLYGON:
       /* TODO: Does polygon contain point?
        */
-      return false;
+      return math_polygon_contains_point(p->geom.polygon.vertices,
+                                         p->geom.polygon.num_vertices, pt);
   }
 
   return false;
