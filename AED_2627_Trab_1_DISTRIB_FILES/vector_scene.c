@@ -670,38 +670,24 @@ VectorScene* vector_scene_load_text(const char* filename) {
         }
       } else if (strcmp(tag, "POLY") == 0) {
         size_t num_verts;
-        int read_header = sscanf(line, "POLY %d %d %d %d %d %lf %zu", &id,
-                                 &z_index, &r, &g, &b, &alpha, &num_verts);
+        int offset = 0;
+        int read_header = sscanf(line, "POLY %d %d %d %d %d %lf %zu%n", &id,
+                                 &z_index, &r, &g, &b, &alpha, &num_verts,
+                                 &offset);
         if (read_header == 7) {
           Color color = {(uint8_t)r, (uint8_t)g, (uint8_t)b};
           Primitive* p = primitive_create_polygon(id, color, alpha, z_index);
           if (p) {
-            char* ptr = line;
-            for (int k = 0; k < 7; k++) {
-              while (*ptr && *ptr != ' ' && *ptr != '\t') {
-                ptr++;
-              }
-              while (*ptr && (*ptr == ' ' || *ptr == '\t')) {
-                ptr++;
-              }
-            }
-
+            const char* ptr = line + offset;
             for (size_t v = 0; v < num_verts; v++) {
               double vx, vy;
-              if (sscanf(ptr, "%lf %lf", &vx, &vy) == 2) {
+              int step = 0;
+              if (sscanf(ptr, "%lf %lf%n", &vx, &vy, &step) == 2) {
                 Point pt = {vx, vy};
                 polygon_add_vertex(p, pt);
-
-                for (int k = 0; k < 2; k++) {
-                  while (*ptr && *ptr != ' ' && *ptr != '\t' && *ptr != '\n' &&
-                         *ptr != '\r') {
-                    ptr++;
-                  }
-                  while (*ptr && (*ptr == ' ' || *ptr == '\t' || *ptr == '\n' ||
-                                  *ptr == '\r')) {
-                    ptr++;
-                  }
-                }
+                ptr += step;
+              } else {
+                break;
               }
             }
             vector_scene_add_primitive(scene, p);
